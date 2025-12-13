@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Наш сервер
+  backend:
+    build: ./backend
+    container_name: investment-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app      # Синхронізація коду (зміни застосовуються відразу)
+      - /app/node_modules   # Не перезаписувати модулі всередині контейнера
+    restart: always
+
+  # Наш інтерфейс
+  frontend:
+    build: ./frontend
+    container_name: investment-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    # Фронтенд повинен знати про бекенд (хоча браузер все одно стукає на localhost)
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    depends_on:
+      - backend # Чекати запуску бекенду
