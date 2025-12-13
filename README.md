@@ -1,7 +1,5 @@
 # 📈 Investment AI Analyst
 
-**[English]** | [Українська](#-інвестиційний-ai-аналітик)
-
 A professional cross-platform application for analyzing and forecasting stock investment portfolios. The project combines the power of **Monte Carlo** simulations with advanced econometric models (**ARIMA**, **GARCH**) running on Python to provide accurate risk and trend assessments.
 
 ---
