@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, BarChart, Bar } from 'recharts';
-import { Settings, PieChart as PieIcon, BarChart3, Save, FolderOpen, DollarSign, Info, Zap, AlertCircle, BrainCircuit, ArrowRight, Trash2, X, RotateCcw } from 'lucide-react';
+import { Settings, PieChart as PieIcon, BarChart3, Save, FolderOpen, DollarSign, Info, Zap, AlertCircle, BrainCircuit, ArrowRight, Trash2, X, RotateCcw, FileText, LineChart as LineChartIcon } from 'lucide-react';
 
 const API_URL = 'http://localhost:5000/api';
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316'];
@@ -101,7 +101,7 @@ const PortfolioAnalyzer = () => {
 
   const deletePortfolio = async (id, e) => {
       e.stopPropagation();
-      if(!window.confirm("Видалити цей портфель?")) return;
+      if(!window.confirm("Видалити цей запис?")) return;
       try {
           await fetch(`${API_URL}/portfolio/${id}`, { method: 'DELETE' });
           loadSavedPortfolios();
@@ -111,8 +111,6 @@ const PortfolioAnalyzer = () => {
   const runSimulation = async () => {
     setLoading(true); setResults(null);
     try {
-      // === САНІТИЗАЦІЯ ДАНИХ (Fix White Screen) ===
-      // Перетворюємо пусті рядки в нулі або дефолтні значення
       const payload = {
         stocks: selectedStocks, weights, 
         initialInvestment: Number(initialInvestment) || 0, 
@@ -136,8 +134,6 @@ const PortfolioAnalyzer = () => {
       
       if (data.error) throw new Error(data.error);
       if (!data.avgPath || data.avgPath.length === 0) throw new Error("Сервер повернув пусті дані");
-      
-      // Перевірка на NaN (ще один рівень захисту)
       if (isNaN(data.simulationStats.median)) throw new Error("Помилка обчислень (NaN). Перевірте вхідні дані.");
 
       setResults(data);
@@ -148,16 +144,91 @@ const PortfolioAnalyzer = () => {
     } finally { setLoading(false); }
   };
 
-  const savePortfolio = async () => {
-    const p = { name: `Портфель ${new Date().toLocaleString('uk-UA')}`, stocks: selectedStocks, weights, settings: { initialInvestment, forecastYears, investmentType } };
+  // === 1. ЗБЕРЕЖЕННЯ КОНФІГУРАЦІЇ (ЧЕРНЕТКА) ===
+  const saveConfiguration = async () => {
+    const name = prompt("Назвіть цю конфігурацію:", `Налаштування ${new Date().toLocaleTimeString()}`);
+    if (!name) return;
+
+    const p = { 
+        name: name,
+        type: 'config', // Маркер типу
+        stocks: selectedStocks, 
+        weights, 
+        fullSettings: {
+            initialInvestment, investmentType, monthlyContribution, yearlyContribution,
+            rebalanceFrequency, forecastYears, simulations, confidenceLevel,
+            inflationRate, expenseRatio, taxRate, dateRange,
+            arimaParams: { p: arimaP, d: arimaD, q: arimaQ },
+            garchParams: { p: garchP, q: garchQ }
+        }
+    };
     await fetch(`${API_URL}/portfolio`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) });
     loadSavedPortfolios();
-    alert("Збережено!");
-    setActiveTab('settings');
   };
 
+  // === 2. ЗБЕРЕЖЕННЯ РЕЗУЛЬТАТУ (ЗНІМОК) ===
+  const saveResult = async () => {
+    if (!results) return;
+    const name = prompt("Назвіть цей результат аналізу:", `Аналіз ${new Date().toLocaleTimeString()}`);
+    if (!name) return;
+
+    const p = { 
+        name: name,
+        type: 'result', // Маркер типу
+        stocks: selectedStocks, 
+        weights, 
+        fullSettings: {
+            initialInvestment, investmentType, monthlyContribution, yearlyContribution,
+            rebalanceFrequency, forecastYears, simulations, confidenceLevel,
+            inflationRate, expenseRatio, taxRate, dateRange,
+            arimaParams: { p: arimaP, d: arimaD, q: arimaQ },
+            garchParams: { p: garchP, q: garchQ }
+        },
+        analysisResult: results // Зберігаємо сам результат
+    };
+    await fetch(`${API_URL}/portfolio`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) });
+    loadSavedPortfolios();
+    alert("Результат збережено!");
+  };
+
+  // === 3. ЗАВАНТАЖЕННЯ ===
   const loadPortfolio = (p) => {
-      setSelectedStocks(p.stocks); setWeights(p.weights); setInitialInvestment(p.settings.initialInvestment); setForecastYears(p.settings.forecastYears); setActiveTab('portfolio');
+      // 1. Відновлюємо змінні
+      setSelectedStocks(p.stocks); 
+      setWeights(p.weights);
+      
+      const s = p.fullSettings || p.settings || {}; // Fallback для старих версій
+      
+      if (s.initialInvestment !== undefined) setInitialInvestment(s.initialInvestment);
+      if (s.investmentType) setInvestmentType(s.investmentType);
+      if (s.monthlyContribution !== undefined) setMonthlyContribution(s.monthlyContribution);
+      if (s.yearlyContribution !== undefined) setYearlyContribution(s.yearlyContribution);
+      if (s.rebalanceFrequency) setRebalanceFrequency(s.rebalanceFrequency);
+      if (s.forecastYears) setForecastYears(s.forecastYears);
+      if (s.simulations) setSimulations(s.simulations);
+      if (s.confidenceLevel) setConfidenceLevel(s.confidenceLevel);
+      if (s.inflationRate !== undefined) setInflationRate(s.inflationRate);
+      if (s.expenseRatio !== undefined) setExpenseRatio(s.expenseRatio);
+      if (s.taxRate !== undefined) setTaxRate(s.taxRate);
+      if (s.dateRange) setDateRange(s.dateRange);
+      
+      if (s.arimaParams) {
+          setArimaP(s.arimaParams.p); setArimaD(s.arimaParams.d); setArimaQ(s.arimaParams.q);
+      }
+      if (s.garchParams) {
+          setGarchP(s.garchParams.p); setGarchQ(s.garchParams.q);
+      }
+
+      // 2. Перевіряємо тип збереження
+      if (p.type === 'result' && p.analysisResult) {
+          // Це збережений аналіз -> Відкриваємо результат
+          setResults(p.analysisResult);
+          setActiveTab('analysis');
+      } else {
+          // Це просто налаштування -> Йдемо редагувати
+          setResults(null);
+          setActiveTab('settings');
+      }
   };
 
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
@@ -184,6 +255,7 @@ const PortfolioAnalyzer = () => {
           ))}
         </div>
 
+        {/* ПОРТФОЛІО */}
         {activeTab === 'portfolio' && (
           <div className="bg-slate-800/50 backdrop-blur rounded-2xl border border-white/10 p-5 animate-in fade-in">
              <div className="flex justify-between items-center mb-4">
@@ -246,14 +318,15 @@ const PortfolioAnalyzer = () => {
                           </div>
                       ))}
                    </div>
-                   <button onClick={savePortfolio} className="w-full mt-6 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 py-3 rounded-xl font-bold flex justify-center gap-2 shadow-lg shadow-green-900/20 transition-all">
-                       <Save size={18}/> Зберегти та продовжити
+                   <button onClick={saveConfiguration} className="w-full mt-6 bg-white/10 hover:bg-white/20 py-3 rounded-xl font-bold flex justify-center gap-2 transition-all">
+                       <FileText size={18}/> Зберегти як чернетку
                    </button>
                 </div>
              )}
           </div>
         )}
 
+        {/* НАЛАШТУВАННЯ */}
         {activeTab === 'settings' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-in fade-in">
              <div className="bg-slate-800/50 backdrop-blur p-5 rounded-2xl border border-white/10 space-y-4">
@@ -322,14 +395,20 @@ const PortfolioAnalyzer = () => {
                         </div>
                     </div>
                 </div>
-                <button onClick={runSimulation} disabled={loading || selectedStocks.length === 0} 
-                     className="w-full bg-gradient-to-r from-purple-600 to-pink-600 py-3 rounded-xl font-bold hover:scale-105 transition-transform flex justify-center gap-2 disabled:opacity-50 disabled:scale-100 shadow-lg shadow-purple-900/20">
-                     {loading ? "Аналіз..." : <><Zap size={18}/> Запустити</>}
-                </button>
+                <div className="space-y-2">
+                    <button onClick={saveConfiguration} className="w-full bg-white/10 hover:bg-white/20 py-3 rounded-xl font-bold flex justify-center gap-2 transition-all">
+                       <FileText size={18}/> Зберегти конфіг
+                    </button>
+                    <button onClick={runSimulation} disabled={loading || selectedStocks.length === 0} 
+                         className="w-full bg-gradient-to-r from-purple-600 to-pink-600 py-3 rounded-xl font-bold hover:scale-105 transition-transform flex justify-center gap-2 disabled:opacity-50 disabled:scale-100 shadow-lg shadow-purple-900/20">
+                         {loading ? "Аналіз..." : <><Zap size={18}/> Запустити</>}
+                    </button>
+                </div>
              </div>
           </div>
         )}
 
+        {/* АНАЛІЗ */}
         {activeTab === 'analysis' && results && (
            <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -421,24 +500,49 @@ const PortfolioAnalyzer = () => {
                       </div>
                   </div>
               </div>
+              
+              <button onClick={saveResult} className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 py-4 rounded-xl font-bold flex justify-center gap-2 shadow-lg shadow-green-900/20 transition-all">
+                   <LineChartIcon size={20}/> Зберегти цей результат
+              </button>
            </div>
         )}
 
+        {/* ЗБЕРЕЖЕНІ */}
         {activeTab === 'saved' && (
            <div className="bg-slate-800/50 backdrop-blur p-6 rounded-2xl border border-white/10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in">
-              {savedPortfolios.length === 0 && <p className="text-gray-500 col-span-3 text-center py-10">Тут пусто. Збережіть свій перший аналіз!</p>}
+              {savedPortfolios.length === 0 && <p className="text-gray-500 col-span-3 text-center py-10">Тут пусто. Збережіть налаштування або результат!</p>}
               {savedPortfolios.map((p, i) => (
-                  <div key={i} onClick={() => loadPortfolio(p)} className="group bg-black/20 p-5 rounded-xl border border-white/5 hover:border-purple-500/50 cursor-pointer transition-all relative overflow-hidden">
+                  <div key={i} onClick={() => loadPortfolio(p)} className="group bg-black/20 p-5 rounded-xl border border-white/5 hover:border-purple-500/50 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between">
                       <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={(e) => deletePortfolio(p.id, e)} className="text-gray-500 hover:text-red-400 bg-black/50 p-2 rounded-lg backdrop-blur">
                               <Trash2 size={16}/>
                           </button>
                       </div>
-                      <div className="font-bold text-lg text-blue-300 mb-1">{p.name}</div>
-                      <div className="text-xs text-gray-400 mb-4 font-mono line-clamp-1">{p.stocks.join(', ')}</div>
+                      
+                      <div>
+                          <div className="flex items-center gap-2 mb-2">
+                             {/* ІКОНКА ТИПУ */}
+                             {p.type === 'result' ? (
+                                 <span className="bg-green-500/20 text-green-400 p-1.5 rounded-lg"><LineChartIcon size={14}/></span>
+                             ) : (
+                                 <span className="bg-blue-500/20 text-blue-400 p-1.5 rounded-lg"><FileText size={14}/></span>
+                             )}
+                             <span className="text-xs text-gray-400 uppercase tracking-wider font-bold">
+                                 {p.type === 'result' ? 'Звіт' : 'Чернетка'}
+                             </span>
+                          </div>
+
+                          <div className="font-bold text-lg text-white mb-1">{p.name}</div>
+                          <div className="text-xs text-gray-400 mb-4 font-mono line-clamp-1">{p.stocks.join(', ')}</div>
+                      </div>
+                      
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-white/5 p-2 rounded"><div className="text-gray-500">Старт</div><div className="text-green-400 font-mono">${p.settings.initialInvestment.toLocaleString()}</div></div>
-                          <div className="bg-white/5 p-2 rounded"><div className="text-gray-500">Горизонт</div><div className="text-purple-400 font-mono">{p.settings.forecastYears} років</div></div>
+                          <div className="bg-white/5 p-2 rounded"><div className="text-gray-500">Старт</div><div className="text-white font-mono">${(p.fullSettings?.initialInvestment || p.settings?.initialInvestment || 0).toLocaleString()}</div></div>
+                          {p.type === 'result' && p.analysisResult ? (
+                              <div className="bg-green-500/10 border border-green-500/20 p-2 rounded"><div className="text-green-500">Фінал (50%)</div><div className="text-green-300 font-bold font-mono">${p.analysisResult.simulationStats.median.toLocaleString()}</div></div>
+                          ) : (
+                              <div className="bg-white/5 p-2 rounded"><div className="text-gray-500">Горизонт</div><div className="text-purple-400 font-mono">{p.fullSettings?.forecastYears || p.settings?.forecastYears} років</div></div>
+                          )}
                       </div>
                   </div>
               ))}
