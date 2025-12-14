@@ -28,3 +28,8 @@ input[type=number] {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+select option {
+  background-color: #1e293b; /* Темно-сірий колір (slate-800) */
+  color: white;
+}
