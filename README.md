@@ -44,11 +44,11 @@ cd backend
 npm install                 # Install Node dependencies
 pip install -r requirements.txt  # Install Python libraries
 node server.js              # Start server (Port 5000)
-
+```
 **2. Frontend Setup**
 ```bash
 cd frontend
 npm install                 # Install React dependencies
 npm run dev                 # Start UI (Port 5173)
-
+```
 **License: MIT Author: 2025 Coursework Project**
